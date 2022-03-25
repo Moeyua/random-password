@@ -30,52 +30,49 @@
 </template>
 
 <script>
-var Mock = require('mockjs')
+import { randomStr, getDate, getObjectIsEmpty } from "cfg/utils.js";
+import db from "cfg/indexedDB.js";
+
 export default {
   name: "App",
   components: {
   },
   data() {
     return {
+      // TODO 修改 config 的数据类型
       password: "",
       length: 15,
       symbolType: ["lower","upper","number"],
-      lower: "abcdefghijklmnopqrstuvwxyz",
-      upper: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
-      number: "0123456789",
-      symbol: "!@#$%^&*()[]",
-      showAnimate: false
+      showAnimate: false,
+      config: {},
+      characters: {}
     };
   },
-  mounted() {
-    this.generate();
+  async mounted() {
+    await db.getDb()
+    await db.read('config').then(data => {
+      this.handleData('unzip', data);
+      this.generate();
+    });
+
   },
   methods: {
-    pool() {
+    getPool() {
       let symbolType = this.symbolType;
-      let pool = "";
-      for (const i in symbolType) {
-        switch (symbolType[i]) {
-        case "upper":
-          pool = pool + this.upper;
-          break;
-        case "lower":
-          pool = pool + this.lower;
-          break;
-        case "number":
-          pool = pool + this.number;
-          break;
-        case "symbol":
-          pool = pool + this.symbol;
-          break;
-        }
+      let pool = [];
+      for (const symbol of symbolType) {
+        pool = pool.concat(this.characters[symbol])
       }
       return pool;
     },
     generate() {
-      this.password = Mock.Random.string( this.pool(), this.length );
+      if (getObjectIsEmpty(this.characters) || getObjectIsEmpty(this.config)) {
+        return;
+      } else {
+        this.password = randomStr(this.getPool(), this.length);
+      }
     },
-    copyToClip(content) {
+    async copyToClip(content) {
       let _this = this;
       navigator.clipboard.writeText(content).then(function() {
         _this.$notify({
@@ -89,6 +86,22 @@ export default {
           message: '复制失败',
         })
       })
+      await db.add('passwords', {value: this.password, date: getDate()}).catch(e => {
+        console.log('插入数据库时发生错误:', e);
+      });
+    },
+
+    /**
+     * 处理数据，type 的值为 'zip' 或者 'unzip'
+     * @param {Object} data
+     * @param {String} type
+     */
+    handleData(type, data) {
+      // TODO 区分 zip 和 unzip
+      console.log(data);
+      for (const item of data) {
+        this[item.id] = item
+      }
     },
     play() {
       this.showAnimate = true;
